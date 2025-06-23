@@ -1,3 +1,8 @@
 pymilvus
 ipykernel
 ollama
+fastapi
+uvicorn
+SQLAlchemy
+pydantic
+python-dotenv
