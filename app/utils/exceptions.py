@@ -22,3 +22,6 @@ class PostgressNoRowFound(BaseError):
 
 class PostgresTransactionFailure(BaseError):
     pass
+
+class FileUploadError(BaseError):
+    pass

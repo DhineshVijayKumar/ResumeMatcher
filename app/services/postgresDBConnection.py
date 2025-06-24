@@ -16,3 +16,6 @@ def get_db():
 
 def create_table():
     Base.metadata.create_all(bind=engine)
+
+def as_dict(obj):
+        return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}

@@ -6,3 +6,6 @@ uvicorn
 SQLAlchemy
 pydantic
 python-dotenv
+python-multipart
+langchain-community
+pypdf
