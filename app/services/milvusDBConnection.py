@@ -8,7 +8,7 @@ port = get_env_variable('milvus_db_port')
 con = connections.connect(host=host, port=port)
 db.using_database('ResumeMatcher')
 
-def insert_to_milvus(job_order: JobOrderMilvus, collection_name: str):
+def insert_to_milvus(job_order, collection_name: str):
      
     if not utility.has_collection(collection_name):
         raise MilvusCollectionNotFoundError(name="MilvusCollectionNotFoundError", message=f"Collection {collection_name} does not exist in Milvus.")
@@ -21,13 +21,13 @@ def insert_to_milvus(job_order: JobOrderMilvus, collection_name: str):
     
     return job_order
 
-def delete_from_milvus(job_order_id: int, collection_name: str):
+def delete_from_milvus(job_order_id: int, collection_name: str, id_col: str = "id"):
     if not utility.has_collection(collection_name):
         raise MilvusCollectionNotFoundError(name="MilvusCollectionNotFoundError", message=f"Collection {collection_name} does not exist in Milvus.")
 
 
     collection = Collection(name=collection_name)
-    result=collection.delete(f"id == {job_order_id}")
+    result=collection.delete(f"{id_col} == {job_order_id}")
 
     if result.delete_count == 0:
         raise MilvusTransactionFailure(f"Failed to delete job order from Milvus.")

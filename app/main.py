@@ -1,6 +1,7 @@
-from app.services.postgresServices import GenericDBService
+from app.services.postgresServices import GenericDBService, JobApplicationService
 import app.schemas.jobOrderSchema as jobOrderSchema
 from app.schemas.candidateSchema import CandidateSchema, CandidateCreateSchema, CandidateMilvus
+from app.schemas.jobApplicationSchema import JobApplicationSchema, JobApplicationCreateSchema, JobApplicationDetailedSchema
 from app.services.milvusDBConnection import insert_to_milvus, delete_from_milvus, update_in_milvus
 from app.utils.vectorEmbedding import get_embedding, get_pdf_embedding
 from app.services.postgresDBConnection import get_db, as_dict
@@ -11,6 +12,8 @@ from fastapi import FastAPI, Depends, HTTPException, Request, status, File, Uplo
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
+from typing import Optional
+import json
 
 app = FastAPI()
 
@@ -66,15 +69,9 @@ def create_job_order(job_order: jobOrderSchema.JobOrderCreate, db: Session = Dep
 @app.delete("/job-orders/{job_order_id}", response_model=jobOrderSchema.JobOrder, tags=["Job Orders"])
 def delete_job_order(job_order_id: int, db: Session = Depends(get_db)):
     jobOrderServices = GenericDBService(db, JobOrder)
-
     db_deleted_job_order = jobOrderServices.delete(job_order_id)
-    
-    if db_deleted_job_order is None:
-        raise HTTPException(status_code=404, detail="Job order not found")  
-    
     delete_from_milvus(job_order_id, "JobOrder")
     jobOrderServices.commit()
-
     return db_deleted_job_order
 
 
@@ -104,6 +101,7 @@ async def create_candidate(
         #get embedding from pdf
         embeddings = get_pdf_embedding(file_path)
 
+        # remove for loop and try
         for embedding in embeddings:
             candidate_milvus = CandidateMilvus(candidate_id=db_candidate['id'], vector=embedding)
             insert_to_milvus(candidate_milvus, "Candidate")
@@ -115,13 +113,99 @@ async def create_candidate(
         db.rollback()
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise 
+        raise e
         
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
         content=db_candidate)
     
+@app.put("/candidates/{candidate_id}", response_model=CandidateSchema, tags=["Candidates"])
+async def update_candidate(
+    candidate_id: int,
+    candidate: Optional[CandidateCreateSchema] = Depends(CandidateCreateSchema._as_form_optional), 
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)   
+):
+    if candidate is None and file is None:
+        raise HTTPException(status_code=422, detail="Unprocessable Entity: At least one field must be provided for update")
+    
+    if file is not None:
+        file_content = await file.read()
+        if not file_content:
+            raise FileUploadError(name="FileUploadError", message="File is empty or not provided")
+        
+        # replace the existing file if it exists
+        file_path = f"app/uploads/{candidate_id}.pdf"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Candidate {candidate_id} does not exist"
+            )
+        
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        
+        embeddings = get_pdf_embedding(file_path)
+        delete_from_milvus(candidate_id, "Candidate", id_col="candidate_id")
+        for embedding in embeddings:
+            candidate_milvus = CandidateMilvus(candidate_id=candidate_id, vector=embedding)
+            insert_to_milvus(candidate_milvus, "Candidate")
 
+    if candidate is not None:
+        candidate_services = GenericDBService(db, Candidate)
+        candidate_services.update(candidate_id, candidate)
+        candidate_services.commit()
+    
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"message": "Candidate updated successfully"}
+    )
+    
+@app.get("/candidates/", response_model=list[CandidateSchema], tags=["Candidates"])
+def get_all_candidates(db: Session = Depends(get_db)):
+    candidate_services = GenericDBService(db, Candidate)
+    candidates = candidate_services.get_all()
+    return candidates
+
+@app.get("/candidates/{candidate_id}", response_model=CandidateSchema, tags=["Candidates"])
+def get_candidate_by_id(candidate_id: int, db: Session = Depends(get_db)):
+    candidate_services = GenericDBService(db, Candidate)
+    candidate = candidate_services.get_by_id(candidate_id)
+    return candidate   
+
+@app.delete("/candidates/{candidate_id}", response_model=CandidateSchema, tags=["Candidates"])
+def delete_candidate(candidate_id: int, db: Session = Depends(get_db)):
+    candidate_services = GenericDBService(db, Candidate)
+    db_deleted_candidate = candidate_services.delete(candidate_id)
+    delete_from_milvus(candidate_id, "Candidate", id_col="candidate_id")
+    os.remove(f"app/uploads/{candidate_id}.pdf")
+    candidate_services.commit()
+    return db_deleted_candidate
+
+@app.get("/job-applications/", response_model=list[JobApplicationDetailedSchema], tags=["Job Applications"])
+def get_all_job_applications(db: Session = Depends(get_db)):
+    job_application_services = JobApplicationService(db)
+    job_applications = job_application_services.get_all()
+    return job_applications
+
+@app.post("/job-applications/", response_model=JobApplicationSchema, tags=["Job Applications"])
+def create_job_application(
+    job_application: JobApplicationSchema,
+    db: Session = Depends(get_db)
+    ):
+    job_application_services = JobApplicationService(db)
+    db_job_application = job_application_services.create(job_application)
+    job_application_services.commit()
+    return db_job_application
+
+@app.delete("/job-applications/", response_model=JobApplicationSchema, tags=["Job Applications"])
+def delete_job_application(job_application: JobApplicationCreateSchema, db: Session = Depends(get_db)):
+    job_application_services = JobApplicationService(db)
+    db_deleted_job_application = job_application_services.delete(candidate_id=job_application.candidate_id, job_order_id=job_application.job_order_id)
+    job_application_services.commit()
+    return db_deleted_job_application
 
 def create_exception_handler(status_code: int, initial_detail: str):
     async def exception_handler(request: Request, exc: Exception):
@@ -134,6 +218,8 @@ def create_exception_handler(status_code: int, initial_detail: str):
             content={"detail": message}
         )
     return exception_handler
+
+
 
 app.add_exception_handler(
     exc_class_or_status_code=EnvVarNotFoundError,
