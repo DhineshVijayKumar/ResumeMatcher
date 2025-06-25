@@ -73,7 +73,6 @@ class JobApplicationService(GenericDBService):
             .join(JobOrder, JobApplication.job_order_id == JobOrder.id)
             .all()
         )
-        print(results)
         return results
 
     

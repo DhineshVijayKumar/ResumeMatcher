@@ -58,15 +58,12 @@ if __name__ == "__main__":
         job_description="Test Description"
     )
     new_job = create_job_order(db, job_order_data)
-    print("Created:", vars(new_job))
 
     # Get all
     all_jobs = get_job_orders(db)
-    print("All jobs:", [vars(job) for job in all_jobs])
 
     # Get by ID
     job = get_job_order_by_id(db, new_job.id)
-    print("Fetched by ID:", vars(job))
 
     # Update
     job_order_data_update = JobOrderCreate(
@@ -75,10 +72,8 @@ if __name__ == "__main__":
         job_description="Updated Description"
     )
     updated_job = update_job_order(db, new_job.id, job_order_data_update)
-    print("Updated:", vars(updated_job))
 
     # Delete
     deleted_job = delete_job_order(db, new_job.id)
-    print("Deleted:", vars(deleted_job))
 
     db.close()
