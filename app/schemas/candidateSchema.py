@@ -28,4 +28,5 @@ class CandidateSchema(CandidateCreateSchema):
 
 class CandidateMilvus(BaseModel):
     candidate_id: int
+    text: str
     vector: list[float]

@@ -38,8 +38,8 @@ def update_job_order(job_order_id: int, job_order: jobOrderSchema.JobOrderCreate
         raise HTTPException(status_code=404, detail="Job order not found")  
     
     vector = get_embedding(job_order.job_description)
-    job_order_milvus = jobOrderSchema.JobOrderMilvus(id=job_order_id, vector=vector)
-    update_in_milvus(job_order_milvus, "JobOrder")
+    job_order_milvus = jobOrderSchema.JobOrderMilvus(id=job_order_id, vector=vector, text=job_order.job_description)
+    update_in_milvus(job_order_milvus, "JobOrders")
 
     jobOrderServices.commit()
     jobOrderServices.refresh(db_updated_job_order)
@@ -58,9 +58,9 @@ def create_job_order(job_order: jobOrderSchema.JobOrderCreate, db: Session = Dep
     db_job_order = as_dict(db_job_order)
     created_id = db_job_order['id']
     vector = get_embedding(job_order.job_description)
-    job_order_milvus = jobOrderSchema.JobOrderMilvus(id=created_id, vector=vector)
+    job_order_milvus = jobOrderSchema.JobOrderMilvus(id=created_id, vector=vector, text=job_order.job_description)
     
-    insert_to_milvus(job_order_milvus, "JobOrder")
+    insert_to_milvus(job_order_milvus, "JobOrders")
     
     jobOrderServices.commit()
 
@@ -70,7 +70,7 @@ def create_job_order(job_order: jobOrderSchema.JobOrderCreate, db: Session = Dep
 def delete_job_order(job_order_id: int, db: Session = Depends(get_db)):
     jobOrderServices = GenericDBService(db, JobOrder)
     db_deleted_job_order = jobOrderServices.delete(job_order_id)
-    delete_from_milvus(job_order_id, "JobOrder")
+    delete_from_milvus(job_order_id, "JobOrders")
     jobOrderServices.commit()
     return db_deleted_job_order
 
@@ -84,8 +84,6 @@ async def create_candidate(
     try:
         candidate_services = GenericDBService(db, Candidate)
         db_candidate = candidate_services.create(candidate)
-        
-        db.flush()
         db_candidate = as_dict(db_candidate)
 
         file_content = await file.read()
@@ -99,12 +97,12 @@ async def create_candidate(
             f.write(file_content)
 
         #get embedding from pdf
-        embeddings = get_pdf_embedding(file_path)
+        embeddings, chunks = get_pdf_embedding(file_path)
 
         # remove for loop and try
         for embedding in embeddings:
-            candidate_milvus = CandidateMilvus(candidate_id=db_candidate['id'], vector=embedding)
-            insert_to_milvus(candidate_milvus, "Candidate")
+            candidate_milvus = CandidateMilvus(candidate_id=db_candidate['id'], text=chunks, vector=embedding)
+            insert_to_milvus(candidate_milvus, "Candidates")
 
         candidate_services.commit()
 
@@ -147,11 +145,14 @@ async def update_candidate(
         with open(file_path, "wb") as f:
             f.write(file_content)
         
-        embeddings = get_pdf_embedding(file_path)
-        delete_from_milvus(candidate_id, "Candidate", id_col="candidate_id")
+        delete_from_milvus(candidate_id, "Candidates", id_col="candidate_id")
+        #get embedding from pdf
+        embeddings, chunks = get_pdf_embedding(file_path)
+
+        # remove for loop and try
         for embedding in embeddings:
-            candidate_milvus = CandidateMilvus(candidate_id=candidate_id, vector=embedding)
-            insert_to_milvus(candidate_milvus, "Candidate")
+            candidate_milvus = CandidateMilvus(candidate_id=candidate_id, text=chunks, vector=embedding)
+            insert_to_milvus(candidate_milvus, "Candidates")
 
     if candidate is not None:
         candidate_services = GenericDBService(db, Candidate)
@@ -179,7 +180,7 @@ def get_candidate_by_id(candidate_id: int, db: Session = Depends(get_db)):
 def delete_candidate(candidate_id: int, db: Session = Depends(get_db)):
     candidate_services = GenericDBService(db, Candidate)
     db_deleted_candidate = candidate_services.delete(candidate_id)
-    delete_from_milvus(candidate_id, "Candidate", id_col="candidate_id")
+    delete_from_milvus(candidate_id, "Candidates", id_col="candidate_id")
     os.remove(f"app/uploads/{candidate_id}.pdf")
     candidate_services.commit()
     return db_deleted_candidate

@@ -20,4 +20,4 @@ def get_pdf_embedding(file_path: str) -> list:
 
     embeddings = [get_embedding(chunk.page_content) for chunk in chunks]
 
-    return embeddings
+    return embeddings, chunks

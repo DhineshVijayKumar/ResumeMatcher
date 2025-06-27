@@ -12,4 +12,5 @@ class JobOrder(JobOrderCreate):
 
 class JobOrderMilvus(BaseModel):
     id: int
+    text: str
     vector: list[float]

@@ -9,3 +9,5 @@ python-dotenv
 python-multipart
 langchain-community
 pypdf
+
+
