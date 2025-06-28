@@ -6,6 +6,7 @@ from app.utils.exceptions import MilvusCollectionNotFoundError, MilvusTransactio
 host = get_env_variable('milvus_db_host')
 port = get_env_variable('milvus_db_port')
 con = connections.connect(host=host, port=port)
+
 db.using_database('ResumeMatcher')
 
 def insert_to_milvus(job_order, collection_name: str):

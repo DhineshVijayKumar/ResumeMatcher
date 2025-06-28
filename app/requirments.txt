@@ -9,5 +9,9 @@ python-dotenv
 python-multipart
 langchain-community
 pypdf
+psycopg2
 
-
+langchain[google-genai]
+langchain-milvus
+langchain-ollama
+langgraph
