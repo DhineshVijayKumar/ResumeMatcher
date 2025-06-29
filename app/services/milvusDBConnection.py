@@ -1,11 +1,10 @@
 from pymilvus import connections, utility, db, Collection
 from app.schemas.jobOrderSchema import JobOrderMilvus
-from app.utils.environmentVariables import get_env_variable
+from app.utils.environmentVariables import MILVUS_DB_HOST, MILVUS_DB_PORT
 from app.utils.exceptions import MilvusCollectionNotFoundError, MilvusTransactionFailure
 
-host = get_env_variable('milvus_db_host')
-port = get_env_variable('milvus_db_port')
-con = connections.connect(host=host, port=port)
+
+con = connections.connect(host=MILVUS_DB_HOST, port=MILVUS_DB_PORT)
 
 db.using_database('ResumeMatcher')
 

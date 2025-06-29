@@ -1,11 +1,11 @@
 import ollama
-from app.utils.environmentVariables import get_env_variable
-from langchain.document_loaders import PyPDFLoader
+from app.utils.environmentVariables import EMBEDDING_MODEL
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from fastapi import File
 
 def get_embedding(prompt: str) -> list:
-    embedding_model=get_env_variable('embedding_model')
+    embedding_model=EMBEDDING_MODEL
     response = ollama.embeddings(model=embedding_model,prompt=prompt)
     return response.get('embedding', [])
 

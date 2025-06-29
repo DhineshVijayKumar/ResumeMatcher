@@ -2,18 +2,23 @@ from app.services.postgresServices import GenericDBService, JobApplicationServic
 import app.schemas.jobOrderSchema as jobOrderSchema
 from app.schemas.candidateSchema import CandidateSchema, CandidateCreateSchema, CandidateMilvus
 from app.schemas.jobApplicationSchema import JobApplicationSchema, JobApplicationCreateSchema, JobApplicationDetailedSchema
+from app.schemas.ragResponse import RAGResponseList
 from app.services.milvusDBConnection import insert_to_milvus, delete_from_milvus, update_in_milvus
 from app.utils.vectorEmbedding import get_embedding, get_pdf_embedding
 from app.services.postgresDBConnection import get_db, as_dict
 from app.utils.exceptions import EnvVarNotFoundError, MilvusDocNotFoundError, PostgressNoRowFound, MilvusCollectionNotFoundError, MilvusTransactionFailure, FileUploadError
 from app.models.postgresModel import JobOrder, Candidate, JobApplication
+from app.services.ragGraph import build_rag_graph
 
 from fastapi import FastAPI, Depends, HTTPException, Request, status, File, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
-from typing import Optional
 import json
+import re
+from typing import Optional
+from langchain.chat_models import init_chat_model
+from langchain_ollama import OllamaEmbeddings
 
 # uvicorn app.main:app --reload
 app = FastAPI()
@@ -208,6 +213,48 @@ def delete_job_application(job_application: JobApplicationCreateSchema, db: Sess
     job_application_services.commit()
     return db_deleted_job_application
 
+import ast
+@app.post("/rag/query", response_model=RAGResponseList, tags=["RAG"])
+def rag_query(query: str):
+    embedding = OllamaEmbeddings(model="nomic-embed-text:v1.5")
+    llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
+    prompt_template = """
+You are a backend API with RAG capabilities. Always respond with only a valid raw JSON array—no markdown, no explanations, and no escape characters.
+
+Instructions:
+- Do NOT wrap the response in triple backticks.
+- Do NOT explain anything.
+- Only output a JSON array of objects.
+- Each object must have the keys: "candidate_id" and "reason".
+- If you don't have enough information to answer, return an empty JSON array: []
+
+Context: {context}
+Question: {question}
+"""
+
+
+    graph = build_rag_graph(db_name="ResumeMatcher",
+                            collection_name="candidates",
+                            embedding_model=embedding,
+                            llm=llm,
+                            prompt_template=prompt_template,
+                            k=5
+                            )
+    
+    response = graph.invoke({"question": query})
+    answer = response["answer"]
+    try:
+        answer = json.loads(answer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Invalid response format from llm: {str(e)}"
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"data": answer}
+        )
+
 def create_exception_handler(status_code: int, initial_detail: str):
     async def exception_handler(request: Request, exc: Exception):
         if hasattr(exc, "message"):
@@ -219,8 +266,6 @@ def create_exception_handler(status_code: int, initial_detail: str):
             content={"detail": message}
         )
     return exception_handler
-
-
 
 app.add_exception_handler(
     exc_class_or_status_code=EnvVarNotFoundError,

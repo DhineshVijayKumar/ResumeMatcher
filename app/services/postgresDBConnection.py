@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from app.utils.environmentVariables import get_env_variable  
+from app.utils.environmentVariables import POSTGRES_DB_URL  
 
-postgres_db_url = get_env_variable('postgres_db_url') 
+postgres_db_url = POSTGRES_DB_URL
 engine = create_engine(postgres_db_url)
 sessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
