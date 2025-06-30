@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
 import json
-import re
+import asyncio
 from typing import Optional
 from langchain.chat_models import init_chat_model
 from langchain_ollama import OllamaEmbeddings
@@ -213,9 +213,8 @@ def delete_job_application(job_application: JobApplicationCreateSchema, db: Sess
     job_application_services.commit()
     return db_deleted_job_application
 
-import ast
 @app.post("/rag/query", response_model=RAGResponseList, tags=["RAG"])
-def rag_query(query: str):
+async def rag_query(query: str):
     embedding = OllamaEmbeddings(model="nomic-embed-text:v1.5")
     llm = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
     prompt_template = """
